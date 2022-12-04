@@ -66,7 +66,9 @@ void Plane::init_ardupilot()
 
     rssi.init();
 
+#if AP_RPM_ENABLED
     rpm_sensor.init();
+#endif
 
     // setup telem slots with serial ports
     gcs().setup_uarts();
@@ -144,7 +146,7 @@ void Plane::init_ardupilot()
 #endif
 
 // init cargo gripper
-#if GRIPPER_ENABLED == ENABLED
+#if AP_GRIPPER_ENABLED
     g2.gripper.init();
 #endif
 }
@@ -197,6 +199,26 @@ void Plane::startup_ground(void)
 }
 
 
+#if AP_FENCE_ENABLED
+/*
+  return true if a mode reason is an automatic mode change due to
+  landing sequencing.
+ */
+static bool mode_reason_is_landing_sequence(const ModeReason reason)
+{
+    switch (reason) {
+    case ModeReason::RTL_COMPLETE_SWITCHING_TO_FIXEDWING_AUTOLAND:
+    case ModeReason::RTL_COMPLETE_SWITCHING_TO_VTOL_LAND_RTL:
+    case ModeReason::QRTL_INSTEAD_OF_RTL:
+    case ModeReason::QLAND_INSTEAD_OF_RTL:
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+#endif // AP_FENCE_ENABLED
+
 bool Plane::set_mode(Mode &new_mode, const ModeReason reason)
 {
 
@@ -246,8 +268,12 @@ bool Plane::set_mode(Mode &new_mode, const ModeReason reason)
 
 #if AP_FENCE_ENABLED
     // may not be allowed to change mode if recovering from fence breach
-    if (hal.util->get_soft_armed() && fence.enabled() && fence.option_enabled(AC_Fence::OPTIONS::DISABLE_MODE_CHANGE) &&
-                                            fence.get_breaches() && in_fence_recovery()) {
+    if (hal.util->get_soft_armed() &&
+        fence.enabled() &&
+        fence.option_enabled(AC_Fence::OPTIONS::DISABLE_MODE_CHANGE) &&
+        fence.get_breaches() &&
+        in_fence_recovery() &&
+        !mode_reason_is_landing_sequence(reason)) {
         gcs().send_text(MAV_SEVERITY_NOTICE,"Mode change to %s denied, in fence recovery", new_mode.name());
         AP_Notify::events.user_mode_change_failed = 1;
         return false;
@@ -327,7 +353,7 @@ void Plane::check_long_failsafe()
     const uint32_t tnow = millis();
     // only act on changes
     // -------------------
-    if (failsafe.state != FAILSAFE_LONG && failsafe.state != FAILSAFE_GCS && flight_stage != AP_Vehicle::FixedWing::FLIGHT_LAND) {
+    if (failsafe.state != FAILSAFE_LONG && failsafe.state != FAILSAFE_GCS && flight_stage != AP_FixedWing::FlightStage::LAND) {
         uint32_t radio_timeout_ms = failsafe.last_valid_rc_ms;
         if (failsafe.state == FAILSAFE_SHORT) {
             // time is relative to when short failsafe enabled
@@ -374,7 +400,7 @@ void Plane::check_short_failsafe()
     // -------------------
     if (g.fs_action_short != FS_ACTION_SHORT_DISABLED &&
        failsafe.state == FAILSAFE_NONE &&
-       flight_stage != AP_Vehicle::FixedWing::FLIGHT_LAND) {
+       flight_stage != AP_FixedWing::FlightStage::LAND) {
         // The condition is checked and the flag rc_failsafe is set in radio.cpp
         if(failsafe.rc_failsafe) {
             failsafe_short_on_event(FAILSAFE_SHORT, ModeReason::RADIO_FAILSAFE);

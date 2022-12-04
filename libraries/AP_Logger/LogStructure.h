@@ -139,6 +139,7 @@ const struct MultiplierStructure log_Multipliers[] = {
 #include <AP_AIS/LogStructure.h>
 #include <AP_HAL_ChibiOS/LogStructure.h>
 #include <AP_RPM/LogStructure.h>
+#include <AC_Fence/LogStructure.h>
 
 // structure used to define logging format
 // It is packed on ChibiOS to save flash space; however, this causes problems
@@ -498,6 +499,7 @@ struct PACKED log_ARSP {
     bool    use;
     bool    healthy;
     float   health_prob;
+    float   test_ratio;
     uint8_t primary;
 };
 
@@ -740,6 +742,7 @@ struct PACKED log_VER {
 // @Field: U: True if sensor is being used
 // @Field: H: True if sensor is healthy
 // @Field: Hp: Probability sensor is healthy
+// @Field: TR: innovation test ratio
 // @Field: Pri: True if sensor is the primary sensor
 
 // @LoggerMessage: CMD
@@ -875,8 +878,8 @@ struct PACKED log_VER {
 // @Field: TimeUS: Time since system startup
 // @Field: TS: target system for command
 // @Field: TC: target component for command
-// @Field: SS: target system for command
-// @Field: SC: target component for command
+// @Field: SS: source system for command
+// @Field: SC: source component for command
 // @Field: Fr: command frame
 // @Field: Cmd: mavlink command enum value
 // @Field: P1: first parameter from mavlink packet
@@ -1192,7 +1195,7 @@ struct PACKED log_VER {
 // @Field: TimeUS: Time since system startup
 // @Field: Name: script name
 // @Field: Runtime: run time
-// @Field: Total_mem: total memory usage
+// @Field: Total_mem: total memory usage of all scripts
 // @Field: Run_mem: run memory usage
 
 // @LoggerMessage: MOTB
@@ -1242,7 +1245,7 @@ LOG_STRUCTURE_FROM_PRECLAND \
     { LOG_RADIO_MSG, sizeof(log_Radio), \
       "RAD", "QBBBBBHH", "TimeUS,RSSI,RemRSSI,TxBuf,Noise,RemNoise,RxErrors,Fixed", "s-------", "F-------", true }, \
 LOG_STRUCTURE_FROM_CAMERA \
-    { LOG_ARSP_MSG, sizeof(log_ARSP), "ARSP",  "QBffcffBBfB", "TimeUS,I,Airspeed,DiffPress,Temp,RawPress,Offset,U,H,Hp,Pri", "s#nPOPP----", "F-00B00----", true }, \
+    { LOG_ARSP_MSG, sizeof(log_ARSP), "ARSP",  "QBffcffBBffB", "TimeUS,I,Airspeed,DiffPress,Temp,RawPress,Offset,U,H,Hp,TR,Pri", "s#nPOPP-----", "F-00B00-----", true }, \
     LOG_STRUCTURE_FROM_BATTMONITOR \
     { LOG_MAG_MSG, sizeof(log_MAG), \
       "MAG", "QBhhhhhhhhhBI",    "TimeUS,I,MagX,MagY,MagZ,OfsX,OfsY,OfsZ,MOX,MOY,MOZ,Health,S", "s#GGGGGGGGG-s", "F-CCCCCCCCC-F", true }, \
@@ -1290,6 +1293,7 @@ LOG_STRUCTURE_FROM_NAVEKF \
 LOG_STRUCTURE_FROM_AHRS \
 LOG_STRUCTURE_FROM_HAL_CHIBIOS \
 LOG_STRUCTURE_FROM_RPM \
+LOG_STRUCTURE_FROM_FENCE \
     { LOG_DF_FILE_STATS, sizeof(log_DSF), \
       "DSF", "QIHIIII", "TimeUS,Dp,Blk,Bytes,FMn,FMx,FAv", "s--b---", "F--0---" }, \
     { LOG_RALLY_MSG, sizeof(log_Rally), \
@@ -1412,6 +1416,7 @@ enum LogMessages : uint8_t {
     LOG_VER_MSG,
     LOG_RCOUT2_MSG,
     LOG_RCOUT3_MSG,
+    LOG_IDS_FROM_FENCE,
 
     _LOG_LAST_MSG_
 };

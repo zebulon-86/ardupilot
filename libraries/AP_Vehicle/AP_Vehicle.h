@@ -51,6 +51,7 @@
 #include <AP_ExternalAHRS/AP_ExternalAHRS.h>
 #include <AP_VideoTX/AP_SmartAudio.h>
 #include <AP_VideoTX/AP_Tramp.h>
+#include <AP_TemperatureSensor/AP_TemperatureSensor.h>
 #include <SITL/SITL.h>
 #include <AP_CustomRotations/AP_CustomRotations.h>
 #include <AP_AIS/AP_AIS.h>
@@ -70,8 +71,7 @@ public:
     }
 
     /* Do not allow copies */
-    AP_Vehicle(const AP_Vehicle &other) = delete;
-    AP_Vehicle &operator=(const AP_Vehicle&) = delete;
+    CLASS_NO_COPY(AP_Vehicle);
 
     static AP_Vehicle *get_singleton();
 
@@ -100,59 +100,6 @@ public:
     // happen for many reasons - bad mavlink packet and bad mode
     // parameters for example.
     void notify_no_such_mode(uint8_t mode_number);
-
-    /*
-      common parameters for fixed wing aircraft
-     */
-    struct FixedWing {
-        AP_Int8 throttle_min;
-        AP_Int8 throttle_max;
-        AP_Int8 throttle_slewrate;
-        AP_Int8 throttle_cruise;
-        AP_Int8 takeoff_throttle_max;
-        AP_Int16 airspeed_min;
-        AP_Int16 airspeed_max;
-        AP_Int32 airspeed_cruise_cm;
-        AP_Int32 min_gndspeed_cm;
-        AP_Int8  crash_detection_enable;
-        AP_Int16 roll_limit_cd;
-        AP_Int16 pitch_limit_max_cd;
-        AP_Int16 pitch_limit_min_cd;
-        AP_Int8  autotune_level;
-        AP_Int8  stall_prevention;
-        AP_Int16 loiter_radius;
-
-        struct Rangefinder_State {
-            bool in_range:1;
-            bool have_initial_reading:1;
-            bool in_use:1;
-            float initial_range;
-            float correction;
-            float initial_correction;
-            float last_stable_correction;
-            uint32_t last_correction_time_ms;
-            uint8_t in_range_count;
-            float height_estimate;
-            float last_distance;
-        };
-
-
-        // stages of flight
-        enum FlightStage {
-            FLIGHT_TAKEOFF       = 1,
-            FLIGHT_VTOL          = 2,
-            FLIGHT_NORMAL        = 3,
-            FLIGHT_LAND          = 4,
-            FLIGHT_ABORT_LAND    = 7
-        };
-    };
-
-    /*
-      common parameters for multicopters
-     */
-    struct MultiCopter {
-        AP_Int16 angle_max;
-    };
 
     void get_common_scheduler_tasks(const AP_Scheduler::Task*& tasks, uint8_t& num_tasks);
     // implementations *MUST* fill in all passed-in fields or we get
@@ -230,7 +177,7 @@ public:
     virtual bool set_desired_speed(float speed) { return false; }
 
     // support for NAV_SCRIPT_TIME mission command
-    virtual bool nav_script_time(uint16_t &id, uint8_t &cmd, float &arg1, float &arg2) { return false; }
+    virtual bool nav_script_time(uint16_t &id, uint8_t &cmd, float &arg1, float &arg2, int16_t &arg3, int16_t &arg4) { return false; }
     virtual void nav_script_time_done(uint16_t id) {}
 
     // allow for VTOL velocity matching of a target
@@ -292,10 +239,8 @@ public:
      */
     virtual bool get_pan_tilt_norm(float &pan_norm, float &tilt_norm) const { return false; }
 
-#if OSD_ENABLED
    // Returns roll and  pitch for OSD Horizon, Plane overrides to correct for VTOL view and fixed wing TRIM_PITCH_CD
     virtual void get_osd_roll_pitch_rad(float &roll, float &pitch) const;
-#endif
 
     /*
      get the target body-frame angular velocities in rad/s (Z-axis component used by some gimbals)
@@ -408,6 +353,10 @@ protected:
     AC_Fence fence;
 #endif
 
+#if AP_TEMPERATURE_SENSOR_ENABLED
+    AP_TemperatureSensor temperature_sensor;
+#endif
+
     static const struct AP_Param::GroupInfo var_info[];
     static const struct AP_Scheduler::Task scheduler_tasks[];
 
@@ -447,6 +396,10 @@ private:
     // run notch update at either loop rate or 200Hz
     void update_dynamic_notch_at_specified_rate();
 
+    // decimation for 1Hz update
+    uint8_t one_Hz_counter;
+    void one_Hz_update();
+
     bool likely_flying;         // true if vehicle is probably flying
     uint32_t _last_flying_ms;   // time when likely_flying last went true
     uint32_t _last_notch_update_ms[HAL_INS_NUM_HARMONIC_NOTCH_FILTERS]; // last time update_dynamic_notch() was run
@@ -454,6 +407,7 @@ private:
     static AP_Vehicle *_singleton;
 
     bool done_safety_init;
+
 
     uint32_t _last_internal_errors;  // backup of AP_InternalError::internal_errors bitmask
 

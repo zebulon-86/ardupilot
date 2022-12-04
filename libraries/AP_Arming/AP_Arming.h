@@ -3,7 +3,6 @@
 #include <AP_HAL/AP_HAL_Boards.h>
 #include <AP_HAL/Semaphores.h>
 #include <AP_Param/AP_Param.h>
-#include <GCS_MAVLink/GCS_MAVLink.h>
 
 class AP_Arming {
 public:
@@ -201,6 +200,8 @@ protected:
     bool generator_checks(bool report) const;
 
     bool opendroneid_checks(bool display_failure);
+    
+    bool serial_protocol_checks(bool display_failure);
 
     virtual bool system_checks(bool report);
 
@@ -245,6 +246,7 @@ private:
         MIS_ITEM_CHECK_TAKEOFF       = (1 << 3),
         MIS_ITEM_CHECK_VTOL_TAKEOFF  = (1 << 4),
         MIS_ITEM_CHECK_RALLY         = (1 << 5),
+        MIS_ITEM_CHECK_RETURN_TO_LAUNCH = (1 << 6),
         MIS_ITEM_CHECK_MAX
     };
 

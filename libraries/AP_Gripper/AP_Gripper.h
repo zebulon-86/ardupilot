@@ -15,6 +15,10 @@
 
 #pragma once
 
+#include "AP_Gripper_config.h"
+
+#if AP_GRIPPER_ENABLED
+
 #include <AP_Param/AP_Param.h>
 
 class AP_Gripper_Backend;
@@ -23,8 +27,8 @@ class AP_Gripper {
 public:
     AP_Gripper();
 
-    AP_Gripper(const AP_Gripper &other) = delete;
-    AP_Gripper &operator=(const AP_Gripper&) = delete;
+    /* Do not allow copies */
+    CLASS_NO_COPY(AP_Gripper);
 
     static AP_Gripper *get_singleton();
     static AP_Gripper *_singleton;
@@ -85,3 +89,5 @@ private:
 namespace AP {
     AP_Gripper *gripper();
 };
+
+#endif  // AP_GRIPPER_ENABLED

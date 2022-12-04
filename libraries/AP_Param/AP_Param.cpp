@@ -2149,7 +2149,7 @@ bool AP_Param::parse_param_line(char *line, char **vname, float &value, bool &re
 }
 
 
-#if HAL_OS_POSIX_IO == 1
+#if HAVE_FILESYSTEM_SUPPORT
 
 // increments num_defaults for each default found in filename
 bool AP_Param::count_defaults_in_file(const char *filename, uint16_t &num_defaults)
@@ -2290,7 +2290,7 @@ bool AP_Param::load_defaults_file(const char *filename, bool last_pass)
     return true;
 }
 
-#endif // HAL_OS_POSIX_IO
+#endif // HAVE_FILESYSTEM_SUPPORT
 
 #if AP_PARAM_MAX_EMBEDDED_PARAM > 0
 /*
@@ -2299,28 +2299,25 @@ bool AP_Param::load_defaults_file(const char *filename, bool last_pass)
 bool AP_Param::count_embedded_param_defaults(uint16_t &count)
 {
     const volatile char *ptr = param_defaults_data.data;
-    uint16_t length = param_defaults_data.length;
+    int32_t length = param_defaults_data.length;
     count = 0;
     
-    while (length) {
+    while (length>0) {
         char line[100];
         char *pname;
         float value;
         bool read_only;
         uint16_t i;
-        uint16_t n = MIN(length, sizeof(line)-1);
+        uint16_t n = length;
         for (i=0;i<n;i++) {
             if (ptr[i] == '\n') {
                 break;
             }
         }
-        if (i == n) {
-            // no newline
-            break;
-        }
-        
-        memcpy(line, (void *)ptr, i);
-        line[i] = 0;
+
+        uint16_t linelen = MIN(i,sizeof(line)-1);
+        memcpy(line, (void *)ptr, linelen);
+        line[linelen] = 0;
 
         length -= i+1;
         ptr += i+1;
@@ -2367,28 +2364,26 @@ void AP_Param::load_embedded_param_defaults(bool last_pass)
     }
 
     const volatile char *ptr = param_defaults_data.data;
-    uint16_t length = param_defaults_data.length;
+    int32_t length = param_defaults_data.length;
     uint16_t idx = 0;
     
-    while (idx < num_defaults && length) {
+    while (idx < num_defaults && length > 0) {
         char line[100];
         char *pname;
         float value;
         bool read_only;
         uint16_t i;
-        uint16_t n = MIN(length, sizeof(line)-1);
+        uint16_t n = length;
         for (i=0;i<n;i++) {
             if (ptr[i] == '\n') {
                 break;
             }
         }
-        if (i == n) {
-            // no newline
-            break;
-        }
-        memcpy(line, (void*)ptr, i);
-        line[i] = 0;
-        
+
+        uint16_t linelen = MIN(i,sizeof(line)-1);
+        memcpy(line, (void *)ptr, linelen);
+        line[linelen] = 0;
+
         length -= i+1;
         ptr += i+1;
 
@@ -3024,6 +3019,18 @@ bool AP_Param::add_param(uint8_t _key, uint8_t param_num, const char *pname, flo
     if (load_int32(key, 0, current_crc) && current_crc != crc) {
         // crc mismatch, we have a conflict with an existing use of this key
         return false;
+    }
+
+    // fill in idx of any gaps, leaving them hidden, this allows
+    // scripts to remove parameters
+    for (uint8_t j=1; j<param_num; j++) {
+        auto &g = const_cast<GroupInfo*>(info.group_info)[j];
+        if (g.idx == 0xff) {
+            g.idx = j;
+            g.flags = AP_PARAM_FLAG_HIDDEN;
+            g.offset = j*sizeof(float);
+            g.type = AP_PARAM_FLOAT;
+        }
     }
 
     auto &ginfo = const_cast<GroupInfo*>(info.group_info)[param_num];

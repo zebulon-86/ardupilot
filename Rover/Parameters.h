@@ -55,6 +55,8 @@ public:
         k_param_battery_volt_pin,
         k_param_battery_curr_pin,
 
+        k_param_precland = 24,
+
         // braking
         k_param_braking_percent_old = 30,   // unused
         k_param_braking_speederr_old,       // unused
@@ -220,6 +222,7 @@ public:
         k_param_notify,
         k_param_button,
         k_param_osd,
+        k_param_optflow,
 
         k_param_logger = 253,  // Logging Group
 
@@ -339,6 +342,11 @@ public:
     AP_Proximity proximity;
 #endif
 
+#if MODE_DOCK_ENABLED == ENABLED
+    // we need a pointer to the mode for the G2 table
+    class ModeDock *mode_dock_ptr;
+#endif
+
     // avoidance library
     AC_Avoid avoid;
 
@@ -363,7 +371,7 @@ public:
     AC_Sprayer sprayer;
 #endif
 
-#if GRIPPER_ENABLED
+#if AP_GRIPPER_ENABLED
     AP_Gripper gripper;
 #endif
 
@@ -418,8 +426,11 @@ public:
     // guided options bitmask
     AP_Int32 guided_options;
 
-    // Rover options
+    // manual mode options
     AP_Int32 manual_options;
+
+    // manual mode steering expo
+    AP_Float manual_steering_expo;
 };
 
 extern const AP_Param::Info var_info[];

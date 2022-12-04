@@ -191,6 +191,19 @@ bool NavEKF3_core::getAirSpdVec(Vector3f &vel) const
     return true;
 }
 
+// return the innovation in m/s, innovation variance in (m/s)^2 and age in msec of the last TAS measurement processed
+// returns false if the data is unavailable
+bool NavEKF3_core::getAirSpdHealthData(float &innovation, float &innovationVariance, uint32_t &age_ms) const
+{
+    if (tasDataDelayed.time_ms == 0) {
+        // no data has been processed since startup
+        return false;
+    }
+    innovation = (float)innovVtas;
+    innovationVariance = (float)varInnovVtas;
+    age_ms = imuSampleTime_ms - tasDataDelayed.time_ms;
+    return true;
+}
 
 // Return the rate of change of vertical position in the down direction (dPosD/dt) of the body frame origin in m/s
 float NavEKF3_core::getPosDownDerivative(void) const
@@ -220,11 +233,13 @@ bool NavEKF3_core::getPosNE(Vector2f &posNE) const
                 const struct Location &gpsloc = gps.location(selected_gps);
                 posNE = public_origin.get_distance_NE_ftype(gpsloc).tofloat();
                 return false;
+#if EK3_FEATURE_BEACON_FUSION
             } else if (rngBcnAlignmentStarted) {
                 // If we are attempting alignment using range beacon data, then report the position
                 posNE.x = receiverPos.x;
                 posNE.y = receiverPos.y;
                 return false;
+#endif
             } else {
                 // If no GPS fix is available, all we can do is provide the last known position
                 posNE = outputDataNew.position.xy().tofloat();
@@ -239,9 +254,9 @@ bool NavEKF3_core::getPosNE(Vector2f &posNE) const
     return false;
 }
 
-// Write the last calculated D position of the body frame origin relative to the EKF origin (m).
+// Write the last calculated D position of the body frame origin relative to the EKF local origin
 // Return true if the estimate is valid
-bool NavEKF3_core::getPosD(float &posD) const
+bool NavEKF3_core::getPosD_local(float &posD) const
 {
     // The EKF always has a height estimate regardless of mode of operation
     // Correct for the IMU offset (EKF calculations are at the IMU)
@@ -258,6 +273,21 @@ bool NavEKF3_core::getPosD(float &posD) const
     // Return the current height solution status
     return filterStatus.flags.vert_pos;
 
+}
+
+// Write the last calculated D position of the body frame origin relative to the public origin
+// Return true if the estimate is valid
+bool NavEKF3_core::getPosD(float &posD) const
+{
+    bool ret = getPosD_local(posD);
+
+    // adjust posD for difference between our origin and the public_origin
+    Location local_origin;
+    if (getOriginLLH(local_origin)) {
+        posD += (public_origin.alt - local_origin.alt) * 0.01;
+    }
+
+    return ret;
 }
 
 // return the estimated height of body frame origin above ground level
@@ -277,7 +307,7 @@ bool NavEKF3_core::getLLH(struct Location &loc) const
     Location origin;
     if (getOriginLLH(origin)) {
         float posD;
-        if(getPosD(posD) && PV_AidingMode != AID_NONE) {
+        if (getPosD_local(posD) && PV_AidingMode != AID_NONE) {
             // Altitude returned is an absolute altitude relative to the WGS-84 spherioid
             loc.set_alt_cm(origin.alt - posD*100.0, Location::AltFrame::ABSOLUTE);
             if (filterStatus.flags.horiz_pos_abs || filterStatus.flags.horiz_pos_rel) {

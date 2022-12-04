@@ -123,7 +123,7 @@ const AP_Param::GroupInfo AP_UAVCAN::var_info[] = {
     // @Param: OPTION
     // @DisplayName: UAVCAN options
     // @Description: Option flags
-    // @Bitmask: 0:ClearDNADatabase,1:IgnoreDNANodeConflicts,2:EnableCanfd,3:IgnoreDNANodeUnhealthy
+    // @Bitmask: 0:ClearDNADatabase,1:IgnoreDNANodeConflicts,2:EnableCanfd,3:IgnoreDNANodeUnhealthy,4:SendServoAsPWM
     // @User: Advanced
     AP_GROUPINFO("OPTION", 5, AP_UAVCAN, _options, 0),
     
@@ -352,7 +352,7 @@ void AP_UAVCAN::init(uint8_t driver_index, bool enable_filters)
 #if AP_RANGEFINDER_UAVCAN_ENABLED
     AP_RangeFinder_UAVCAN::subscribe_msgs(this);
 #endif
-#if HAL_EFI_ENABLED
+#if HAL_EFI_DRONECAN_ENABLED
     AP_EFI_DroneCAN::subscribe_msgs(this);
 #endif
 
@@ -528,11 +528,13 @@ void AP_UAVCAN::SRV_send_actuator(void)
             if (_SRV_conf[starting_servo].servo_pending && ((((uint32_t) 1) << starting_servo) & _servo_bm)) {
                 cmd.actuator_id = starting_servo + 1;
 
-                // TODO: other types
-                cmd.command_type = uavcan::equipment::actuator::Command::COMMAND_TYPE_UNITLESS;
-
-                // TODO: failsafe, safety
-                cmd.command_value = constrain_float(((float) _SRV_conf[starting_servo].pulse - 1000.0) / 500.0 - 1.0, -1.0, 1.0);
+                if (option_is_set(Options::USE_ACTUATOR_PWM)) {
+                    cmd.command_type = uavcan::equipment::actuator::Command::COMMAND_TYPE_PWM;
+                    cmd.command_value = _SRV_conf[starting_servo].pulse;
+                } else {
+                    cmd.command_type = uavcan::equipment::actuator::Command::COMMAND_TYPE_UNITLESS;
+                    cmd.command_value = constrain_float(((float) _SRV_conf[starting_servo].pulse - 1000.0) / 500.0 - 1.0, -1.0, 1.0);
+                }
 
                 msg.commands.push_back(cmd);
 
@@ -997,9 +999,9 @@ void AP_UAVCAN::handle_ESC_status(AP_UAVCAN* ap_uavcan, uint8_t node_id, const E
 
     ap_uavcan->update_rpm(esc_index, cb.msg->rpm);
     ap_uavcan->update_telem_data(esc_index, t,
-        AP_ESC_Telem_Backend::TelemetryType::CURRENT
-            | AP_ESC_Telem_Backend::TelemetryType::VOLTAGE
-            | AP_ESC_Telem_Backend::TelemetryType::TEMPERATURE);
+        (isnanf(cb.msg->current) ? 0 : AP_ESC_Telem_Backend::TelemetryType::CURRENT)
+            | (isnanf(cb.msg->voltage) ? 0 : AP_ESC_Telem_Backend::TelemetryType::VOLTAGE)
+            | (isnanf(cb.msg->temperature) ? 0 : AP_ESC_Telem_Backend::TelemetryType::TEMPERATURE));
 #endif
 }
 

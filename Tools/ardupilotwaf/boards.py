@@ -114,6 +114,31 @@ class Board:
         else:
             cfg.msg("Enabled firmware ID checking", 'no', color='YELLOW')
 
+        if cfg.options.enable_gps_logging:
+            env.DEFINES.update(
+                AP_GPS_DEBUG_LOGGING_ENABLED=1,
+            )
+            cfg.msg("GPS Debug Logging", 'yes')
+        else:
+            cfg.msg("GPS Debug Logging", 'no', color='YELLOW')
+
+        # allow enable of custom controller for any board
+        # enabled on sitl by default
+        if (cfg.options.enable_custom_controller or self.get_name() == "sitl") and not cfg.options.no_gcs:
+            env.ENABLE_CUSTOM_CONTROLLER = True
+            env.DEFINES.update(
+                AP_CUSTOMCONTROL_ENABLED=1,
+            )
+            env.AP_LIBRARIES += [
+                'AC_CustomControl'
+            ]
+            cfg.msg("Enabled custom controller", 'yes')
+        else:
+            env.DEFINES.update(
+                AP_CUSTOMCONTROL_ENABLED=0,
+            )
+            cfg.msg("Enabled custom controller", 'no', color='YELLOW')
+
         d = env.get_merged_dict()
         # Always prepend so that arguments passed in the command line get
         # the priority.
@@ -253,6 +278,10 @@ class Board:
         if cfg.options.bootloader:
             # don't let bootloaders try and pull scripting in
             cfg.options.disable_scripting = True
+            if cfg.options.signed_fw:
+                env.DEFINES.update(
+                    ENABLE_HEAP = 1,
+                )
         else:
             env.DEFINES.update(
                 ENABLE_HEAP = 1,
@@ -261,6 +290,9 @@ class Board:
         if cfg.options.enable_math_check_indexes:
             env.CXXFLAGS += ['-DMATH_CHECK_INDEXES']
 
+        if cfg.options.private_key:
+            env.PRIVATE_KEY = cfg.options.private_key
+            
         env.CXXFLAGS += [
             '-std=gnu++11',
 
@@ -391,9 +423,6 @@ class Board:
                 UAVCAN_NULLPTR = 'nullptr'
             )
 
-            env.INCLUDES += [
-                cfg.srcnode.find_dir('modules/uavcan/libuavcan/include').abspath()
-            ]
 
         if cfg.options.build_dates:
             env.build_dates = True
@@ -576,6 +605,7 @@ class sitl(Board):
         cfg.define('HAL_WITH_RAMTRON', 1)
         cfg.define('AP_GENERATOR_RICHENPOWER_ENABLED', 1)
         cfg.define('AP_OPENDRONEID_ENABLED', 1)
+        cfg.define('AP_SIGNED_FIRMWARE', 0)
 
         if self.with_can:
             cfg.define('HAL_NUM_CAN_IFACES', 2)
@@ -714,7 +744,6 @@ class sitl_periph_gps(sitl):
             CAN_APP_NODE_NAME = '"org.ardupilot.ap_periph_gps"',
             AP_AIRSPEED_ENABLED = 0,
             HAL_PERIPH_ENABLE_GPS = 1,
-            HAL_WITH_DSP = 1,
             HAL_CAN_DEFAULT_NODE_ID = 0,
             HAL_RAM_RESERVE_START = 0,
             APJ_BOARD_ID = 100,
@@ -725,6 +754,8 @@ class sitl_periph_gps(sitl):
             HAL_RALLY_ENABLED = 0,
             HAL_SCHEDULER_ENABLED = 0,
             CANARD_ENABLE_CANFD = 1,
+            CANARD_MULTI_IFACE = 1,
+            HAL_CANMANAGER_ENABLED = 0,
         )
         # libcanard is written for 32bit platforms
         env.CXXFLAGS += [
@@ -814,6 +845,9 @@ class esp32(Board):
     def build(self, bld):
         super(esp32, self).build(bld)
         bld.load('esp32')
+
+    def get_name(self):
+        return self.__class__.__name__
 
 
 class chibios(Board):
@@ -1003,13 +1037,28 @@ class chibios(Board):
                 env.DEFINES.update(CANARD_ENABLE_CANFD=1)
             else:
                 env.DEFINES.update(CANARD_ENABLE_TAO_OPTION=1)
-
+            if not cfg.options.bootloader:
+                if int(cfg.env.HAL_NUM_CAN_IFACES) > 1:
+                    env.DEFINES.update(CANARD_MULTI_IFACE=1)
+                else:
+                    env.DEFINES.update(CANARD_MULTI_IFACE=0)
         if cfg.options.Werror or cfg.env.CC_VERSION in gcc_whitelist:
             cfg.msg("Enabling -Werror", "yes")
             if '-Werror' not in env.CXXFLAGS:
                 env.CXXFLAGS += [ '-Werror' ]
         else:
             cfg.msg("Enabling -Werror", "no")
+
+        if cfg.options.signed_fw:
+            cfg.define('AP_SIGNED_FIRMWARE', 1)
+            env.CFLAGS += [
+                '-DAP_SIGNED_FIRMWARE=1',
+            ]
+        else:
+            cfg.define('AP_SIGNED_FIRMWARE', 0)
+            env.CFLAGS += [
+                '-DAP_SIGNED_FIRMWARE=0',
+            ]
 
         try:
             import intelhex

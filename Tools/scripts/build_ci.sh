@@ -92,11 +92,6 @@ for t in $CI_BUILD_TARGET; do
         run_autotest "Heli" "build.Helicopter" "test.Helicopter"
         continue
     fi
-    # travis-ci
-    if [ "$t" == "sitltest-copter-tests1" ]; then
-        run_autotest "Copter" "build.Copter" "test.CopterTests1"
-        continue
-    fi
     #github actions ci
     if [ "$t" == "sitltest-copter-tests1a" ]; then
         run_autotest "Copter" "build.Copter" "test.CopterTests1a"
@@ -118,13 +113,6 @@ for t in $CI_BUILD_TARGET; do
         run_autotest "Copter" "build.Copter" "test.CopterTests1e"
         continue
     fi
-
-    # travis-ci
-    if [ "$t" == "sitltest-copter-tests2" ]; then
-        run_autotest "Copter" "build.Copter" "test.CopterTests2"
-        continue
-    fi
-    #github actions ci
     if [ "$t" == "sitltest-copter-tests2a" ]; then
         run_autotest "Copter" "build.Copter" "test.CopterTests2a"
         continue
@@ -257,6 +245,14 @@ for t in $CI_BUILD_TARGET; do
         continue
     fi
 
+    if [ "$t" == "fmuv3-bootloader" ]; then
+        echo "Building fmuv3 bootloader"
+        $waf configure --board fmuv3 --bootloader
+        $waf clean
+        $waf bootloader
+        continue
+    fi
+    
     if [ "$t" == "stm32f7" ]; then
         echo "Building mRoX21-777/"
         $waf configure --Werror --board mRoX21-777
@@ -343,6 +339,21 @@ for t in $CI_BUILD_TARGET; do
         continue
     fi
 
+    if [ "$t" == "signing" ]; then
+        echo "Building signed firmwares"
+        sudo apt-get update
+        sudo apt-get install -y python3-dev
+        python3 -m pip install pymonocypher
+        ./Tools/scripts/signing/generate_keys.py testkey
+        $waf configure --board CubeOrange-ODID --signed-fw --private-key testkey_private_key.dat
+        $waf copter
+        $waf configure --board MatekL431-DShot --signed-fw --private-key testkey_private_key.dat
+        $waf AP_Periph
+        ./Tools/scripts/build_bootloaders.py --signing-key testkey_public_key.dat CubeOrange-ODID
+        ./Tools/scripts/build_bootloaders.py --signing-key testkey_public_key.dat MatekL431-DShot
+        continue
+    fi
+    
     if [ "$t" == "python-cleanliness" ]; then
         echo "Checking Python code cleanliness"
         ./Tools/scripts/run_flake8.py
@@ -362,7 +373,14 @@ for t in $CI_BUILD_TARGET; do
              --no-disable-all \
              --no-disable-none \
              --no-disable-in-turn \
+             --no-enable-in-turn \
              --board=CubeOrange \
+             --build-targets=copter \
+             --build-targets=plane
+        echo "Checking all/none options in build_options.py work"
+        time ./Tools/autotest/test_build_options.py \
+             --no-disable-in-turn \
+             --no-enable-in-turn \
              --build-targets=copter \
              --build-targets=plane
         continue

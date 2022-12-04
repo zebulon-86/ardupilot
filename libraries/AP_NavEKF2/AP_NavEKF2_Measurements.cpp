@@ -1,7 +1,6 @@
 #include <AP_HAL/AP_HAL.h>
 
 #include "AP_NavEKF2_core.h"
-#include <AP_Vehicle/AP_Vehicle.h>
 #include <GCS_MAVLink/GCS.h>
 #include <AP_DAL/AP_DAL.h>
 #include <AP_InternalError/AP_InternalError.h>
@@ -114,7 +113,7 @@ void NavEKF2_core::readRangeFinder(void)
 
 // write the raw optical flow measurements
 // this needs to be called externally.
-void NavEKF2_core::writeOptFlowMeas(const uint8_t rawFlowQuality, const Vector2f &rawFlowRates, const Vector2f &rawGyroRates, const uint32_t msecFlowMeas, const Vector3f &posOffset)
+void NavEKF2_core::writeOptFlowMeas(const uint8_t rawFlowQuality, const Vector2f &rawFlowRates, const Vector2f &rawGyroRates, const uint32_t msecFlowMeas, const Vector3f &posOffset, float heightOverride)
 {
     // The raw measurements need to be optical flow rates in radians/second averaged across the time since the last update
     // The PX4Flow sensor outputs flow rates with the following axis and sign conventions:
@@ -159,6 +158,8 @@ void NavEKF2_core::writeOptFlowMeas(const uint8_t rawFlowQuality, const Vector2f
         ofDataNew.flowRadXY = (-rawFlowRates).toftype(); // raw (non motion compensated) optical flow angular rate about the X axis (rad/sec)
         // write the flow sensor position in body frame
         ofDataNew.body_offset = posOffset.toftype();
+        // write the flow sensor height override
+        ofDataNew.heightOverride = heightOverride;
         // write flow rate measurements corrected for body rates
         ofDataNew.flowRadXYcomp.x = ofDataNew.flowRadXY.x + ofDataNew.bodyRadXYZ.x;
         ofDataNew.flowRadXYcomp.y = ofDataNew.flowRadXY.y + ofDataNew.bodyRadXYZ.y;
@@ -796,6 +797,7 @@ void NavEKF2_core::readAirSpdData()
 *              Range Beacon Measurements                *
 ********************************************************/
 
+#if AP_BEACON_ENABLED
 // check for new range beacon data and push to data buffer if available
 void NavEKF2_core::readRngBcnData()
 {
@@ -902,6 +904,7 @@ void NavEKF2_core::readRngBcnData()
     rngBcnDataToFuse = storedRangeBeacon.recall(rngBcnDataDelayed,imuDataDelayed.time_ms);
 
 }
+#endif  // AP_BEACON_ENABLED
 
 /*
   update timing statistics structure

@@ -35,6 +35,10 @@ extern const AP_HAL::HAL &hal;
 #define AP_PERIPH_ESC_TELEM_PORT_DEFAULT -1
 #endif
 
+#ifndef AP_PERIPH_ESC_TELEM_RATE_DEFAULT
+#define AP_PERIPH_ESC_TELEM_RATE_DEFAULT 50
+#endif
+
 #ifndef AP_PERIPH_BARO_ENABLE_DEFAULT
 #define AP_PERIPH_BARO_ENABLE_DEFAULT 1
 #endif
@@ -87,6 +91,16 @@ const AP_Param::Info AP_Periph_FW::var_info[] = {
     // @User: Advanced
     // @RebootRequired: True
     GARRAY(can_baudrate,     0, "CAN_BAUDRATE", 1000000),
+
+#ifdef HAL_PERIPH_ENABLE_SLCAN
+    // @Param: CAN_SLCAN_CPORT
+    // @DisplayName: SLCAN Route
+    // @Description: CAN Interface ID to be routed to SLCAN, 0 means no routing
+    // @Values: 0:Disabled,1:First interface,2:Second interface
+    // @User: Standard
+    // @RebootRequired: True
+    GSCALAR(can_slcan_cport, "CAN_SLCAN_CPORT", 1),
+#endif
 
 #if HAL_NUM_CAN_IFACES >= 2
     // @Param: CAN_PROTOCOL
@@ -359,6 +373,14 @@ const AP_Param::Info AP_Periph_FW::var_info[] = {
     // @RebootRequired: True
     GSCALAR(esc_pwm_type, "ESC_PWM_TYPE",     0),
 
+    // @Param: ESC_CMD_TIMO
+    // @DisplayName: ESC Command Timeout
+    // @Description: This is the duration (ms) with which to hold the last driven ESC command before timing out and zeroing the ESC outputs. To disable zeroing of outputs in event of CAN loss, use 0. Use values greater than the expected duration between two CAN frames to ensure Periph is not starved of ESC Raw Commands.
+    // @Range: 0 10000
+    // @Units: ms
+    // @User: Advanced
+    GSCALAR(esc_command_timeout_ms, "ESC_CMD_TIMO",     200),
+
 #if HAL_WITH_ESC_TELEM && !HAL_GCS_ENABLED
     // @Param: ESC_TELEM_PORT
     // @DisplayName: ESC Telemetry Serial Port
@@ -369,6 +391,23 @@ const AP_Param::Info AP_Periph_FW::var_info[] = {
     // @RebootRequired: True
     GSCALAR(esc_telem_port, "ESC_TELEM_PORT", AP_PERIPH_ESC_TELEM_PORT_DEFAULT),
 #endif
+
+#if HAL_WITH_ESC_TELEM
+    // @Param: ESC_TELEM_RATE
+    // @DisplayName: ESC Telemetry update rate
+    // @Description: This is the rate at which ESC Telemetry will be sent across the CAN bus
+    // @Range: 0 1000
+    // @Increment: 1
+    // @User: Advanced
+    // @RebootRequired: True
+    GSCALAR(esc_telem_rate, "ESC_TELEM_RATE", AP_PERIPH_ESC_TELEM_RATE_DEFAULT),
+#endif
+#endif
+
+#if AP_TEMPERATURE_SENSOR_ENABLED
+    // @Group: TEMP
+    // @Path: ../libraries/AP_TemperatureSensor/AP_TemperatureSensor.cpp
+    GOBJECT(temperature_sensor,         "TEMP",     AP_TemperatureSensor),
 #endif
 
 #ifdef HAL_PERIPH_ENABLE_MSP

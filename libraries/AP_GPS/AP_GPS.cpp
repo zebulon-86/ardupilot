@@ -308,14 +308,12 @@ const AP_Param::GroupInfo AP_GPS::var_info[] = {
     AP_GROUPINFO("_BLEND_TC", 21, AP_GPS, _blend_tc, 10.0f),
 #endif
 
-#if GPS_MOVING_BASELINE
     // @Param: _DRV_OPTIONS
     // @DisplayName: driver options
     // @Description: Additional backend specific options
     // @Bitmask: 0:Use UART2 for moving baseline on ublox,1:Use base station for GPS yaw on SBF,2:Use baudrate 115200,3:Use dedicated CAN port b/w GPSes for moving baseline,4:Use ellipsoid height instead of AMSL for uBlox driver
     // @User: Advanced
     AP_GROUPINFO("_DRV_OPTIONS", 22, AP_GPS, _driver_options, 0),
-#endif
 
 #if AP_GPS_SBF_ENABLED
     // @Param: _COM_PORT
@@ -592,10 +590,34 @@ void AP_GPS::send_blob_start(uint8_t instance)
     }
 #endif // AP_GPS_NMEA_ENABLED
 
-    // send combined initialisation blob, on the assumption that the
-    // GPS units will parse what they need and ignore the data they
-    // don't understand:
-    send_blob_start(instance, _initialisation_blob, sizeof(_initialisation_blob));
+    // the following devices don't have init blobs:
+    const char *blob = nullptr;
+    uint32_t blob_size = 0;
+    switch (_type[instance]) {
+#if AP_GPS_SBF_ENABLED
+    case GPS_TYPE_SBF:
+#endif //AP_GPS_SBF_ENABLED
+#if AP_GPS_GSOF_ENABLED
+    case GPS_TYPE_GSOF:
+#endif //AP_GPS_GSOF_ENABLED
+#if AP_GPS_NOVA_ENABLED
+    case GPS_TYPE_NOVA:
+#endif //AP_GPS_NOVA_ENABLED
+#if HAL_SIM_GPS_ENABLED
+    case GPS_TYPE_SITL:
+#endif  // HAL_SIM_GPS_ENABLED
+        // none of these GPSs have initialisation blobs
+        break;
+    default:
+        // send combined initialisation blob, on the assumption that the
+        // GPS units will parse what they need and ignore the data they
+        // don't understand:
+        blob = _initialisation_blob;
+        blob_size = sizeof(_initialisation_blob);
+        break;
+    }
+
+    send_blob_start(instance, blob, blob_size);
 }
 
 /*
@@ -695,6 +717,29 @@ AP_GPS_Backend *AP_GPS::_detect_instance(uint8_t instance)
     // all remaining drivers automatically cycle through baud rates to detect
     // the correct baud rate, and should have the selected baud broadcast
     dstate->auto_detected_baud = true;
+    const uint32_t now = AP_HAL::millis();
+
+    if (now - dstate->last_baud_change_ms > GPS_BAUD_TIME_MS) {
+        // try the next baud rate
+        // incrementing like this will skip the first element in array of bauds
+        // this is okay, and relied upon
+        dstate->current_baud++;
+        if (dstate->current_baud == ARRAY_SIZE(_baudrates)) {
+            dstate->current_baud = 0;
+        }
+        uint32_t baudrate = _baudrates[dstate->current_baud];
+        _port[instance]->begin(baudrate);
+        _port[instance]->set_flow_control(AP_HAL::UARTDriver::FLOW_CONTROL_DISABLE);
+        dstate->last_baud_change_ms = now;
+
+        if (_auto_config >= GPS_AUTO_CONFIG_ENABLE_SERIAL_ONLY) {
+            send_blob_start(instance);
+        }
+    }
+
+    if (_auto_config >= GPS_AUTO_CONFIG_ENABLE_SERIAL_ONLY) {
+        send_blob_update(instance);
+    }
 
     switch (_type[instance]) {
 #if AP_GPS_SBF_ENABLED
@@ -718,30 +763,6 @@ AP_GPS_Backend *AP_GPS::_detect_instance(uint8_t instance)
 
     default:
         break;
-    }
-
-    const uint32_t now = AP_HAL::millis();
-
-    if (now - dstate->last_baud_change_ms > GPS_BAUD_TIME_MS) {
-        // try the next baud rate
-        // incrementing like this will skip the first element in array of bauds
-        // this is okay, and relied upon
-        dstate->current_baud++;
-        if (dstate->current_baud == ARRAY_SIZE(_baudrates)) {
-            dstate->current_baud = 0;
-        }
-        uint32_t baudrate = _baudrates[dstate->current_baud];
-        _port[instance]->begin(baudrate);
-        _port[instance]->set_flow_control(AP_HAL::UARTDriver::FLOW_CONTROL_DISABLE);
-        dstate->last_baud_change_ms = now;
-
-        if (_auto_config >= GPS_AUTO_CONFIG_ENABLE_SERIAL_ONLY) {
-            send_blob_start(instance);
-        }
-    }
-
-    if (_auto_config >= GPS_AUTO_CONFIG_ENABLE_SERIAL_ONLY) {
-        send_blob_update(instance);
     }
 
     if (initblob_state[instance].remaining != 0) {
@@ -791,7 +812,7 @@ AP_GPS_Backend *AP_GPS::_detect_instance(uint8_t instance)
             return new AP_GPS_SBP(*this, state[instance], _port[instance]);
         }
 #endif //AP_GPS_SBP_ENABLED
-#if !HAL_MINIMIZE_FEATURES && AP_GPS_SIRF_ENABLED
+#if AP_GPS_SIRF_ENABLED
         if ((_type[instance] == GPS_TYPE_AUTO || _type[instance] == GPS_TYPE_SIRF) &&
                  AP_GPS_SIRF::_detect(dstate->sirf_detect_state, data)) {
             return new AP_GPS_SIRF(*this, state[instance], _port[instance]);
@@ -2033,6 +2054,13 @@ bool AP_GPS::is_healthy(uint8_t instance) const
         return false;
     }
 
+#ifdef HAL_BUILD_AP_PERIPH
+    /*
+      on AP_Periph handling of timing is done by the flight controller
+      receiving the DroneCAN messages
+     */
+    return drivers[instance] != nullptr && drivers[instance]->is_healthy();
+#else
     /*
       allow two lost frames before declaring the GPS unhealthy, but
       require the average frame rate to be close to 5Hz. We allow for
@@ -2054,6 +2082,7 @@ bool AP_GPS::is_healthy(uint8_t instance) const
 
     return delay_ok && drivers[instance] != nullptr &&
            drivers[instance]->is_healthy();
+#endif // HAL_BUILD_AP_PERIPH
 }
 
 bool AP_GPS::prepare_for_arming(void) {

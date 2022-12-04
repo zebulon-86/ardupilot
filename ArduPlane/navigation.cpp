@@ -224,7 +224,7 @@ void Plane::calc_airspeed_errors()
         }
 #endif
 
-    } else if (flight_stage == AP_Vehicle::FixedWing::FLIGHT_LAND) {
+    } else if (flight_stage == AP_FixedWing::FlightStage::LAND) {
         // Landing airspeed target
         target_airspeed_cm = landing.get_target_airspeed_cm();
     } else if (control_mode == &mode_guided && new_airspeed_cm > 0) { //DO_CHANGE_SPEED overrides onboard guided speed commands, user would have re-enter guided mode to revert
@@ -411,7 +411,7 @@ void Plane::update_fbwb_speed_height(void)
         target_altitude.last_elevator_input = elevator_input;
     }
 
-    check_fbwb_minimum_altitude();
+    check_fbwb_altitude();
 
     altitude_error_cm = calc_altitude_error_cm();
 

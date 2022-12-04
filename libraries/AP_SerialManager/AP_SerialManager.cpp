@@ -543,7 +543,10 @@ void AP_SerialManager::init()
 
 #ifndef HAL_BUILD_AP_PERIPH
                 case SerialProtocol_RCIN:
-                    AP::RC().add_uart(uart);
+                    if (!AP::RC().has_uart()) {
+                        AP::RC().add_uart(uart);
+                    }
+
                     break;
 #endif
                     

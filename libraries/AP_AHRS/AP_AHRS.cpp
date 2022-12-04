@@ -971,6 +971,36 @@ bool AP_AHRS::airspeed_vector_true(Vector3f &vec) const
     return false;
 }
 
+// return the innovation in m/s, innovation variance in (m/s)^2 and age in msec of the last TAS measurement processed
+// returns false if the data is unavailable
+bool AP_AHRS::airspeed_health_data(float &innovation, float &innovationVariance, uint32_t &age_ms) const
+{
+    switch (active_EKF_type()) {
+    case EKFType::NONE:
+        break;
+#if HAL_NAVEKF2_AVAILABLE
+    case EKFType::TWO:
+        break;
+#endif
+
+#if HAL_NAVEKF3_AVAILABLE
+    case EKFType::THREE:
+        return EKF3.getAirSpdHealthData(innovation, innovationVariance, age_ms);
+#endif
+
+#if AP_AHRS_SIM_ENABLED
+    case EKFType::SIM:
+        break;
+#endif
+
+#if HAL_EXTERNAL_AHRS_ENABLED
+    case EKFType::EXTERNAL:
+        break;
+#endif
+    }
+    return false;
+}
+
 // return a synthetic airspeed estimate (one derived from sensors
 // other than an actual airspeed sensor), if available. return
 // true if we have a synthetic airspeed.  ret will not be modified
@@ -1227,13 +1257,13 @@ Vector2f AP_AHRS::groundspeed_vector(void)
 #if HAL_NAVEKF2_AVAILABLE
     case EKFType::TWO:
         EKF2.getVelNED(vec);
-        return Vector2f(vec.x, vec.y);
+        return vec.xy();
 #endif
 
 #if HAL_NAVEKF3_AVAILABLE
     case EKFType::THREE:
         EKF3.getVelNED(vec);
-        return Vector2f(vec.x, vec.y);
+        return vec.xy();
 #endif
 
 #if AP_AHRS_SIM_ENABLED
@@ -2047,7 +2077,7 @@ bool AP_AHRS::pre_arm_check(bool requires_position, char *failure_msg, uint8_t f
 
     // ensure we're using the configured backend, but bypass in compass-less cases:
     if (ekf_type() != active_EKF_type() && AP::compass().use_for_yaw()) {
-        hal.util->snprintf(failure_msg, failure_msg_len, "AHRS: not using configured AHRS type");
+        hal.util->snprintf(failure_msg, failure_msg_len, "not using configured AHRS type");
         return false;
     }
 
@@ -2163,13 +2193,13 @@ bool AP_AHRS::get_filter_status(nav_filter_status &status) const
 }
 
 // write optical flow data to EKF
-void  AP_AHRS::writeOptFlowMeas(const uint8_t rawFlowQuality, const Vector2f &rawFlowRates, const Vector2f &rawGyroRates, const uint32_t msecFlowMeas, const Vector3f &posOffset)
+void  AP_AHRS::writeOptFlowMeas(const uint8_t rawFlowQuality, const Vector2f &rawFlowRates, const Vector2f &rawGyroRates, const uint32_t msecFlowMeas, const Vector3f &posOffset, float heightOverride)
 {
 #if HAL_NAVEKF2_AVAILABLE
-    EKF2.writeOptFlowMeas(rawFlowQuality, rawFlowRates, rawGyroRates, msecFlowMeas, posOffset);
+    EKF2.writeOptFlowMeas(rawFlowQuality, rawFlowRates, rawGyroRates, msecFlowMeas, posOffset, heightOverride);
 #endif
 #if HAL_NAVEKF3_AVAILABLE
-    EKF3.writeOptFlowMeas(rawFlowQuality, rawFlowRates, rawGyroRates, msecFlowMeas, posOffset);
+    EKF3.writeOptFlowMeas(rawFlowQuality, rawFlowRates, rawGyroRates, msecFlowMeas, posOffset, heightOverride);
 #endif
 }
 

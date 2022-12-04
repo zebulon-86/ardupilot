@@ -136,7 +136,12 @@ class BoardList(object):
 
             # bdshot
             "fmuv3-bdshot",
-            "OMNIBUSF7V2-bdshot",
+
+            # renamed to KakuteH7Mini-Nand
+            "KakuteH7Miniv2",
+
+            # renamed to AtomRCF405NAVI
+            "AtomRCF405"
 
             # other
             "crazyflie2",
@@ -145,6 +150,7 @@ class BoardList(object):
             "MazzyStarDrone",
             "omnibusf4pro-one",
             "skyviper-f412-rev1",
+            "SkystarsH7HD",
             "*-ODID",
             "*-ODID-heli",
         ]
@@ -172,7 +178,6 @@ class BoardList(object):
             "f103-HWESC",
             "f103-Trigger",
             "G4-ESC",
-            "HereID",
             "HerePro",
         ]
         ret = []

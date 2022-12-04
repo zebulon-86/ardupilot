@@ -150,6 +150,9 @@ IMU Invensense SPI:mpu6000 ROTATION_YAW_180
 # one baro, multiple possible choices for different board variants
 BARO BMP280 I2C:0:0x76
 BARO DPS310 I2C:0:0x76
+define AP_BARO_BACKEND_DEFAULT_ENABLED 0
+define AP_BARO_BMP280_ENABLED 1
+define AP_BARO_DPS280_ENABLED 1
 
 define HAL_OS_FATFS_IO 1
 define HAL_BOARD_LOG_DIRECTORY "/APM/LOGS"
@@ -188,13 +191,14 @@ define HAL_SPRAYER_ENABLED 0
 
 # reduce max size of embedded params for apj_tool.py
 define AP_PARAM_MAX_EMBEDDED_PARAM 1024
-define HAL_WITH_DSP FALSE
+define HAL_GYROFFT_ENABLED 0
 
 # save some flash
-define HAL_GENERATOR_ENABLED 0
-define AC_OAPATHPLANNER_ENABLED 0
-define PRECISION_LANDING 0
+include ../include/save_some_flash.inc
 define HAL_BARO_WIND_COMP_ENABLED 0
-define GRIPPER_ENABLED 0
-define AP_OPTICALFLOW_ENABLED 0
-define AP_ICENGINE_ENABLED 0
+define AP_GRIPPER_ENABLED 0
+define AP_BATTMON_SYNTHETIC_CURRENT_ENABLED 0
+
+# only include ublox GPS driver
+include ../include/minimal_GPS.inc
+

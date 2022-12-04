@@ -84,10 +84,6 @@
  # define RANGEFINDER_FILT_DEFAULT 0.5f     // filter for rangefinder distance
 #endif
 
-#ifndef SURFACE_TRACKING_VELZ_MAX
- # define SURFACE_TRACKING_VELZ_MAX 150     // max vertical speed change while surface tracking with rangefinder
-#endif
-
 #ifndef SURFACE_TRACKING_TIMEOUT_MS
  # define SURFACE_TRACKING_TIMEOUT_MS  1000 // surface tracking target alt will reset to current rangefinder alt after this many milliseconds without a good rangefinder alt
 #endif
@@ -108,36 +104,9 @@
  # define MAV_SYSTEM_ID          1
 #endif
 
-
-//////////////////////////////////////////////////////////////////////////////
-// Battery monitoring
-//
-#ifndef BOARD_VOLTAGE_MIN
- # define BOARD_VOLTAGE_MIN             4.3f        // min board voltage in volts for pre-arm checks
-#endif
-
-#ifndef BOARD_VOLTAGE_MAX
- # define BOARD_VOLTAGE_MAX             5.8f        // max board voltage in volts for pre-arm checks
-#endif
-
 // prearm GPS hdop check
 #ifndef GPS_HDOP_GOOD_DEFAULT
  # define GPS_HDOP_GOOD_DEFAULT         140     // minimum hdop that represents a good position.  used during pre-arm checks if fence is enabled
-#endif
-
-// GCS failsafe
-#ifndef FS_GCS
- # define FS_GCS                        DISABLED
-#endif
-
-// Radio failsafe while using RC_override
-#ifndef FS_RADIO_RC_OVERRIDE_TIMEOUT_MS
- # define FS_RADIO_RC_OVERRIDE_TIMEOUT_MS  1000    // RC Radio failsafe triggers after 1 second while using RC_override from ground station
-#endif
-
-// Radio failsafe
-#ifndef FS_RADIO_TIMEOUT_MS
- #define FS_RADIO_TIMEOUT_MS            500     // RC Radio Failsafe triggers after 500 milliseconds with No RC Input
 #endif
 
 // missing terrain data failsafe
@@ -170,33 +139,15 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
-//  Crop Sprayer - enabled only on larger firmwares
-#ifndef SPRAYER_ENABLED
- # define SPRAYER_ENABLED  HAL_SPRAYER_ENABLED
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
 // Precision Landing with companion computer or IRLock sensor
 #ifndef PRECISION_LANDING
  # define PRECISION_LANDING ENABLED
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
-// gripper - enabled only on larger firmwares
-#ifndef GRIPPER_ENABLED
- # define GRIPPER_ENABLED !HAL_MINIMIZE_FEATURES
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
 // winch support
 #ifndef WINCH_ENABLED
 # define WINCH_ENABLED !HAL_MINIMIZE_FEATURES
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
-// rotations per minute sensor support
-#ifndef RPM_ENABLED
- # define RPM_ENABLED !HAL_MINIMIZE_FEATURES
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -437,13 +388,6 @@
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
-// CAMERA TRIGGER AND CONTROL
-//
-#ifndef CAMERA
- # define CAMERA        ENABLED
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
 // Flight mode definitions
 //
 
@@ -628,14 +572,6 @@
 // Fence, Rally and Terrain and AC_Avoidance defaults
 //
 
-#ifndef AC_RALLY
- #define AC_RALLY   ENABLED
-#endif
-
-#if AP_TERRAIN_AVAILABLE && !AC_RALLY
- #error Terrain relies on Rally which is disabled
-#endif
-
 #ifndef AC_AVOID_ENABLED
  #define AC_AVOID_ENABLED   ENABLED
 #endif
@@ -710,4 +646,8 @@
 
 #ifndef HAL_FRAME_TYPE_DEFAULT
 #define HAL_FRAME_TYPE_DEFAULT AP_Motors::MOTOR_FRAME_TYPE_X
+#endif
+
+#ifndef AC_CUSTOMCONTROL_MULTI_ENABLED
+#define AC_CUSTOMCONTROL_MULTI_ENABLED FRAME_CONFIG == MULTICOPTER_FRAME && AP_CUSTOMCONTROL_ENABLED
 #endif

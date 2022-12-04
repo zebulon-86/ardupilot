@@ -27,7 +27,7 @@ void Copter::init_ardupilot()
 #endif
 
     // init cargo gripper
-#if GRIPPER_ENABLED == ENABLED
+#if AP_GRIPPER_ENABLED
     g2.gripper.init();
 #endif
 
@@ -159,7 +159,7 @@ void Copter::init_ardupilot()
     g2.beacon.init();
 #endif
 
-#if RPM_ENABLED == ENABLED
+#if AP_RPM_ENABLED
     // initialise AP_RPM library
     rpm_sensor.init();
 #endif
@@ -182,6 +182,10 @@ void Copter::init_ardupilot()
 #if AP_SCRIPTING_ENABLED
     g2.scripting.init();
 #endif // AP_SCRIPTING_ENABLED
+
+#if AC_CUSTOMCONTROL_MULTI_ENABLED == ENABLED
+    custom_control.init();
+#endif
 
     // set landed flags
     set_land_complete(true);

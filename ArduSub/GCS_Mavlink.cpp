@@ -1,6 +1,7 @@
 #include "Sub.h"
 
 #include "GCS_Mavlink.h"
+#include <AP_RPM/AP_RPM_config.h>
 
 MAV_TYPE GCS_Sub::frame_type() const
 {
@@ -95,7 +96,9 @@ int16_t GCS_MAVLINK_Sub::vfr_hud_throttle() const
 // Work around to get temperature sensor data out
 void GCS_MAVLINK_Sub::send_scaled_pressure3()
 {
-    if (!sub.celsius.healthy()) {
+#if AP_TEMPERATURE_SENSOR_ENABLED
+    float temperature;
+    if (!sub.temperature_sensor.get_temperature(temperature)) {
         return;
     }
     mavlink_msg_scaled_pressure3_send(
@@ -103,8 +106,9 @@ void GCS_MAVLINK_Sub::send_scaled_pressure3()
         AP_HAL::millis(),
         0,
         0,
-        sub.celsius.temperature() * 100,
+        temperature * 100,
         0); // TODO: use differential pressure temperature
+#endif
 }
 
 bool GCS_MAVLINK_Sub::send_info()
@@ -311,7 +315,7 @@ const AP_Param::GroupInfo GCS_MAVLINK_Parameters::var_info[] = {
 
     // @Param: EXTRA3
     // @DisplayName: Extra data type 3 stream rate to ground station
-    // @Description: Stream rate of AHRS, HWSTATUS, and SYSTEM_TIME to ground station
+    // @Description: Stream rate of AHRS and SYSTEM_TIME to ground station
     // @Units: Hz
     // @Range: 0 50
     // @Increment: 1
@@ -373,14 +377,12 @@ static const ap_message STREAM_EXTRA2_msgs[] = {
 };
 static const ap_message STREAM_EXTRA3_msgs[] = {
     MSG_AHRS,
-    MSG_HWSTATUS,
     MSG_SYSTEM_TIME,
     MSG_RANGEFINDER,
     MSG_DISTANCE_SENSOR,
 #if AP_TERRAIN_AVAILABLE
     MSG_TERRAIN,
 #endif
-    MSG_BATTERY2,
     MSG_BATTERY_STATUS,
     MSG_GIMBAL_DEVICE_ATTITUDE_STATUS,
     MSG_OPTICAL_FLOW,
@@ -388,7 +390,7 @@ static const ap_message STREAM_EXTRA3_msgs[] = {
     MSG_MAG_CAL_PROGRESS,
     MSG_EKF_STATUS_REPORT,
     MSG_VIBRATION,
-#if RPM_ENABLED == ENABLED
+#if AP_RPM_ENABLED
     MSG_RPM,
 #endif
     MSG_ESC_TELEMETRY,
