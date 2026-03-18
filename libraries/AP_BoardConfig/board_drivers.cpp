@@ -95,6 +95,13 @@ void AP_BoardConfig::board_setup_drivers(void)
     case FMUV6_BOARD_HOLYBRO_6X:
     case FMUV6_BOARD_HOLYBRO_6X_REV6:
     case FMUV6_BOARD_HOLYBRO_6X_45686:
+    case FMUV6_BOARD_HOLYBRO_6X_LSM6DSV32X:
+    case FMUV6_BOARD_HOLYBRO_6X_LSM6DSK320X:
+    case FMUV6_BOARD_HOLYBRO_6X_LSM6DSV32X_SPI2_ICM45686:
+    case FMUV6_BOARD_HOLYBRO_6X_LSM6DSK320X_SPI2_ICM45686:
+    case FMUV6_BOARD_HOLYBRO_6C:
+    case FMUV6_BOARD_HOLYBRO_6C_LSM6DSV16X:
+    case FMUV6_BOARD_HOLYBRO_6C_LSM6DSK320X:
     case FMUV6_BOARD_CUAV_6X:
         break;
     default:
@@ -450,17 +457,52 @@ void AP_BoardConfig::board_setup()
 }
 
 
-#ifdef HAL_CHIBIOS_ARCH_FMUV6
+#if AP_FEATURE_BOARD_DETECT && defined(HAL_CHIBIOS_ARCH_FMUV6)
 
 #define BMI088REG_CHIPID 0x00
 #define CHIPID_BMI088_G 0x0F
+#define LSM6REG_WHOAMI 0x0F
+#define LSM6_WHOAMI_LSM6DSV32X 0x70
+#define LSM6_WHOAMI_LSM6DSK320X 0x75
 
 /*
   detect which FMUV6 variant we are running on
  */
 void AP_BoardConfig::detect_fmuv6_variant()
 {
-    if (((spi_check_register_inv2("icm20649", INV2REG_WHOAMI, INV2_WHOAMI_ICM20649) ||
+    if (hal.spi->get_device_ptr("bmi055_g") != nullptr &&
+        spi_check_register("lsm6x1", LSM6REG_WHOAMI, LSM6_WHOAMI_LSM6DSV32X)) {
+        state.board_type.set_and_notify(FMUV6_BOARD_HOLYBRO_6C_LSM6DSV16X);
+        DEV_PRINTF("Detected Holybro 6C BMI088 + LSM6DSV16X\n");
+    } else if (hal.spi->get_device_ptr("bmi055_g") != nullptr &&
+               spi_check_register("lsm6x1", LSM6REG_WHOAMI, LSM6_WHOAMI_LSM6DSK320X)) {
+        state.board_type.set_and_notify(FMUV6_BOARD_HOLYBRO_6C_LSM6DSK320X);
+        DEV_PRINTF("Detected Holybro 6C BMI088 + LSM6DSK320X\n");
+    } else if (hal.spi->get_device_ptr("bmi055_g") != nullptr &&
+               spi_check_register("icm42688", INV3REG_WHOAMI, INV3_WHOAMI_ICM42688)) {
+        state.board_type.set_and_notify(FMUV6_BOARD_HOLYBRO_6C);
+        DEV_PRINTF("Detected Holybro 6C BMI088 + ICM42688\n");
+    } else if (spi_check_register("lsm6x1", LSM6REG_WHOAMI, LSM6_WHOAMI_LSM6DSV32X) &&
+        spi_check_register("lsm6x2", LSM6REG_WHOAMI, LSM6_WHOAMI_LSM6DSV32X) &&
+        spi_check_register("lsm6x3", LSM6REG_WHOAMI, LSM6_WHOAMI_LSM6DSV32X)) {
+        state.board_type.set_and_notify(FMUV6_BOARD_HOLYBRO_6X_LSM6DSV32X);
+        DEV_PRINTF("Detected Holybro 6X 3x LSM6DSV32X\n");
+    } else if (spi_check_register("lsm6x1", LSM6REG_WHOAMI, LSM6_WHOAMI_LSM6DSK320X) &&
+               spi_check_register("lsm6x2", LSM6REG_WHOAMI, LSM6_WHOAMI_LSM6DSK320X) &&
+               spi_check_register("lsm6x3", LSM6REG_WHOAMI, LSM6_WHOAMI_LSM6DSK320X)) {
+        state.board_type.set_and_notify(FMUV6_BOARD_HOLYBRO_6X_LSM6DSK320X);
+        DEV_PRINTF("Detected Holybro 6X 3x LSM6DSK320X\n");
+    } else if (spi_check_register("lsm6x1", LSM6REG_WHOAMI, LSM6_WHOAMI_LSM6DSV32X) &&
+               spi_check_register("icm45686-2", INV3REG_456_WHOAMI, INV3_WHOAMI_ICM45686) &&
+               spi_check_register("lsm6x3", LSM6REG_WHOAMI, LSM6_WHOAMI_LSM6DSV32X)) {
+        state.board_type.set_and_notify(FMUV6_BOARD_HOLYBRO_6X_LSM6DSV32X_SPI2_ICM45686);
+        DEV_PRINTF("Detected Holybro 6X 2x LSM6DSV32X + SPI2 ICM45686\n");
+    } else if (spi_check_register("lsm6x1", LSM6REG_WHOAMI, LSM6_WHOAMI_LSM6DSK320X) &&
+               spi_check_register("icm45686-2", INV3REG_456_WHOAMI, INV3_WHOAMI_ICM45686) &&
+               spi_check_register("lsm6x3", LSM6REG_WHOAMI, LSM6_WHOAMI_LSM6DSK320X)) {
+        state.board_type.set_and_notify(FMUV6_BOARD_HOLYBRO_6X_LSM6DSK320X_SPI2_ICM45686);
+        DEV_PRINTF("Detected Holybro 6X 2x LSM6DSK320X + SPI2 ICM45686\n");
+    } else if (((spi_check_register_inv2("icm20649", INV2REG_WHOAMI, INV2_WHOAMI_ICM20649) ||
           spi_check_register("bmi088_g", BMI088REG_CHIPID, CHIPID_BMI088_G)) && // alternative config
          spi_check_register("icm42688", INV3REG_WHOAMI, INV3_WHOAMI_ICM42688) &&
          spi_check_register("icm42670", INV3REG_WHOAMI, INV3_WHOAMI_ICM42670))) {
