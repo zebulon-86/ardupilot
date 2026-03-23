@@ -39,7 +39,7 @@ extern const AP_HAL::HAL& hal;
 namespace {
 
 #ifndef LSM6DSV_TIMING_DEBUG_ENABLED
-#define LSM6DSV_TIMING_DEBUG_ENABLED 1
+#define LSM6DSV_TIMING_DEBUG_ENABLED 0
 #endif
 
 #ifndef LSM6DSV_EXPERIMENTAL_PRIMARY_FIFO
@@ -1428,7 +1428,11 @@ void AP_InertialSensor_LSM6DSV::poll_data()
 #endif
 
     if (active_sample_source() == SampleSourceMode::FIFO) {
+#if LSM6DSV_TIMING_DEBUG_ENABLED
         const uint16_t n_published = drain_fifo(now_us);
+#else
+        drain_fifo(now_us);
+#endif
         check_register_monitor();
 #if LSM6DSV_TIMING_DEBUG_ENABLED
         _poll_debug.publishes += n_published;
