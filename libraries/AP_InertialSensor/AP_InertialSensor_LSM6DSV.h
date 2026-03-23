@@ -184,6 +184,8 @@ private:
     void publish_current_sample(SampleFrame &sample, uint8_t gyro_status);
     void check_register_monitor();
     void update_temperature(uint8_t status, const int16_t *raw_temp=nullptr);
+    uint8_t odr_code_for_rate(uint16_t rate_hz) const;
+    uint16_t calculate_backend_rate(uint16_t base_rate_hz) const;
     uint8_t high_g_mode_for_instance(uint8_t accel_instance_hint) const;
     bool dual_channel_mode_for_instance(uint8_t accel_instance_hint) const;
     char accel_route_code() const;
@@ -213,6 +215,9 @@ private:
     uint8_t _accel_status_reg;
     uint8_t _accel_ready_mask;
     uint8_t _temperature_counter;
+    uint16_t _backend_rate_hz;
+    uint32_t _backend_period_us;
+    bool _fast_sampling;
     AccelRoute _accel_route;
     PollDebugStats _poll_debug{};
     uint8_t *_fifo_buffer;

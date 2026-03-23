@@ -19,6 +19,9 @@
   Uses HAODR mode-1 for high-accuracy ODR (1000-8000 Hz) and
   continuous FIFO for burst reads.  Digital filters auto-adapt to ODR
   so no per-rate AAF register reconfiguration is needed.
+
+  fast sampling is controlled via INS_FAST_SAMPLE / INS_GYRO_RATE
+  with base rate 1000 Hz.
  */
 
 #include "AP_InertialSensor_LSM6DSV.h"
@@ -108,8 +111,7 @@ constexpr uint8_t LSM6DSV_CTRL6_PRESET_GYRO_4000DPS_HIGH_G = 0x0D;
 constexpr uint8_t LSM6DSV_CTRL8_PRESET_ACCEL_16G = 0x03;
 constexpr uint8_t LSM6DSV_CTRL8_PRESET_ACCEL_32G = 0x06;
 
-constexpr uint16_t LSM6DSV_SAMPLE_RATE_HZ = 2000;
-constexpr uint32_t LSM6DSV_BACKEND_PERIOD_US = 1000000UL / LSM6DSV_SAMPLE_RATE_HZ;
+constexpr uint16_t LSM6DSV_DEFAULT_BACKEND_RATE_HZ = 1000;
 constexpr uint8_t LSM6DSV_INIT_MAX_TRIES = 5;
 constexpr uint8_t LSM6DSV_RESET_TIMEOUT_MS = 100;
 constexpr uint8_t LSM6DSV_DATA_READY_TIMEOUT_MS = 20;
@@ -329,9 +331,28 @@ void AP_InertialSensor_LSM6DSV::start()
     if (!_imu.get_accel_instance(accel_instance_hint) ||
         !_imu.get_gyro_instance(gyro_instance) ||
         !prepare_accel_mode(accel_instance_hint) ||
-        !_imu.register_accel(accel_instance, LSM6DSV_SAMPLE_RATE_HZ, _dev->get_bus_id_devtype(_variant_info->devtype)) ||
-        !_imu.register_gyro(gyro_instance, LSM6DSV_SAMPLE_RATE_HZ, _dev->get_bus_id_devtype(_variant_info->devtype))) {
+        !_imu.register_accel(accel_instance, LSM6DSV_DEFAULT_BACKEND_RATE_HZ, _dev->get_bus_id_devtype(_variant_info->devtype)) ||
+        !_imu.register_gyro(gyro_instance, LSM6DSV_DEFAULT_BACKEND_RATE_HZ, _dev->get_bus_id_devtype(_variant_info->devtype))) {
         return;
+    }
+
+    // determine fast sampling rate (SPI only)
+    _backend_rate_hz = LSM6DSV_DEFAULT_BACKEND_RATE_HZ;
+    if (enable_fast_sampling(accel_instance) && get_fast_sampling_rate() > 1) {
+        _fast_sampling = (_dev->bus_type() == AP_HAL::Device::BUS_TYPE_SPI);
+    }
+    if (_fast_sampling) {
+        _backend_rate_hz = calculate_backend_rate(LSM6DSV_DEFAULT_BACKEND_RATE_HZ);
+    }
+    _backend_period_us = 1000000UL / _backend_rate_hz;
+
+    // re-configure ODR registers for the target sampling rate
+    WITH_SEMAPHORE(_dev->get_semaphore());
+    const uint8_t odr = odr_code_for_rate(_backend_rate_hz);
+    write_register(LSM6DSV_REG_CTRL1, LSM6DSV_CTRL_MODE_HAODR | odr, true);
+    write_register(LSM6DSV_REG_CTRL2, LSM6DSV_CTRL_MODE_HAODR | odr, true);
+    if (active_sample_source() == SampleSourceMode::FIFO) {
+        configure_primary_fifo();
     }
 
     if (_accel_route != AccelRoute::Primary && !is_zero(_accel_range_g)) {
@@ -350,7 +371,7 @@ void AP_InertialSensor_LSM6DSV::start()
         }
     }
 
-    periodic_handle = _dev->register_periodic_callback(LSM6DSV_BACKEND_PERIOD_US,
+    periodic_handle = _dev->register_periodic_callback(_backend_period_us,
                                                        FUNCTOR_BIND_MEMBER(&AP_InertialSensor_LSM6DSV::poll_data, void));
 }
 
@@ -368,27 +389,30 @@ bool AP_InertialSensor_LSM6DSV::get_output_banner(char* banner, uint8_t banner_l
     }
 
     if (_accel_route == AccelRoute::HighG) {
-        snprintf(banner, banner_len, "IMU%u: %s high-g %ug temp %s sample %s",
+        snprintf(banner, banner_len, "IMU%u: %s high-g %ug %.1fkHz temp %s sample %s",
                  gyro_instance,
                  _variant_info->name,
                  static_cast<unsigned>(_accel_range_g),
+                 _backend_rate_hz * 0.001f,
                  temperature_mode_name(),
                  sample_mode_name());
         return true;
     }
 
     if (_accel_route == AccelRoute::DualChannel) {
-        snprintf(banner, banner_len, "IMU%u: %s dual-channel temp %s sample %s",
+        snprintf(banner, banner_len, "IMU%u: %s dual-channel %.1fkHz temp %s sample %s",
                  gyro_instance,
                  _variant_info->name,
+                 _backend_rate_hz * 0.001f,
                  temperature_mode_name(),
                  sample_mode_name());
         return true;
     }
 
-    snprintf(banner, banner_len, "IMU%u: %s primary temp %s sample %s",
+    snprintf(banner, banner_len, "IMU%u: %s primary %.1fkHz temp %s sample %s",
              gyro_instance,
              _variant_info->name,
+             _backend_rate_hz * 0.001f,
              temperature_mode_name(),
              sample_mode_name());
     return true;
@@ -434,11 +458,11 @@ bool AP_InertialSensor_LSM6DSV::hardware_init()
             continue;
         }
 
-        if (!write_register(LSM6DSV_REG_CTRL1, LSM6DSV_CTRL_MODE_HAODR | LSM6DSV_MODE1_ODR_2000HZ, true)) {
+        if (!write_register(LSM6DSV_REG_CTRL1, LSM6DSV_CTRL_MODE_HAODR | LSM6DSV_MODE1_ODR_1000HZ, true)) {
             continue;
         }
 
-        if (!write_register(LSM6DSV_REG_CTRL2, LSM6DSV_CTRL_MODE_HAODR | LSM6DSV_MODE1_ODR_2000HZ, true)) {
+        if (!write_register(LSM6DSV_REG_CTRL2, LSM6DSV_CTRL_MODE_HAODR | LSM6DSV_MODE1_ODR_1000HZ, true)) {
             continue;
         }
 
@@ -526,8 +550,8 @@ bool AP_InertialSensor_LSM6DSV::configure_primary_fifo()
 #if !LSM6DSV_EXPERIMENTAL_PRIMARY_FIFO
     return true;
 #else
-    constexpr uint8_t fifo_ctrl3 =
-        uint8_t((LSM6DSV_MODE1_ODR_2000HZ << 4) | LSM6DSV_MODE1_ODR_2000HZ);
+    const uint8_t odr = odr_code_for_rate(_backend_rate_hz);
+    const uint8_t fifo_ctrl3 = uint8_t((odr << 4) | odr);
 
     return write_register(LSM6DSV_REG_FIFO_CTRL1,
                           uint8_t(LSM6DSV_PRIMARY_FIFO_WATERMARK_WORDS & 0xFFU),
@@ -573,6 +597,33 @@ bool AP_InertialSensor_LSM6DSV::configure_dual_channel_accel()
     return write_register(LSM6DSV_REG_CTRL8,
                           _variant_info->ctrl8_value | LSM6DSV_CTRL8_XL_DUALC_EN,
                           true);
+}
+
+uint8_t AP_InertialSensor_LSM6DSV::odr_code_for_rate(uint16_t rate_hz) const
+{
+    switch (rate_hz) {
+    case 8000: return LSM6DSV_MODE1_ODR_8000HZ;
+    case 4000: return LSM6DSV_MODE1_ODR_4000HZ;
+    case 2000: return LSM6DSV_MODE1_ODR_2000HZ;
+    case 1000:
+    default:   return LSM6DSV_MODE1_ODR_1000HZ;
+    }
+}
+
+// calculate the backend sample rate accounting for fast sampling
+// multiplier and loop rate constraints
+uint16_t AP_InertialSensor_LSM6DSV::calculate_backend_rate(uint16_t base_rate_hz) const
+{
+    // constrain the gyro rate to be at least the loop rate
+    uint8_t min_mult = 1;
+    if (get_loop_rate_hz() > base_rate_hz) {
+        min_mult = 2;
+    }
+    if (get_loop_rate_hz() > base_rate_hz * 2) {
+        min_mult = 4;
+    }
+    const uint8_t mult = constrain_int16(get_fast_sampling_rate(), min_mult, 8);
+    return constrain_int16(base_rate_hz * mult, base_rate_hz, 8000);
 }
 
 uint8_t AP_InertialSensor_LSM6DSV::high_g_mode_for_instance(const uint8_t accel_instance_hint) const
@@ -1279,7 +1330,7 @@ uint16_t AP_InertialSensor_LSM6DSV::drain_fifo(uint32_t now_us)
     }
 
     if (samples_published > 0) {
-        _dev->adjust_periodic_callback(periodic_handle, LSM6DSV_BACKEND_PERIOD_US);
+        _dev->adjust_periodic_callback(periodic_handle, _backend_period_us);
     }
 
     return samples_published;
