@@ -46,6 +46,20 @@ namespace {
 #define LSM6DSV_EXPERIMENTAL_PRIMARY_FIFO 1
 #endif
 
+// Enable the second-stage digital low-pass filter (LPF2) on the
+// accelerometer output.  Bandwidth is set by LSM6DSV_ACCEL_LPF2_BW.
+#ifndef LSM6DSV_ACCEL_LPF2_ENABLED
+#define LSM6DSV_ACCEL_LPF2_ENABLED 1
+#endif
+
+// LPF2 bandwidth selection written to CTRL8 HP_LPF2_XL_BW bits [7:5].
+// When CTRL9.LPF2_XL_EN = 1 these select the second-stage cutoff:
+//   0x00 = ODR/4   0x20 = ODR/10   0x40 = ODR/20   0x60 = ODR/45
+//   0x80 = ODR/100 0xA0 = ODR/200  0xC0 = ODR/400  0xE0 = ODR/800
+#ifndef LSM6DSV_ACCEL_LPF2_BW
+#define LSM6DSV_ACCEL_LPF2_BW 0x20  // ODR/10 → 200 Hz @ 2 kHz ODR
+#endif
+
 // registers
 constexpr uint8_t LSM6DSV_REG_FUNC_CFG_ACCESS = 0x01;
 constexpr uint8_t LSM6DSV_REG_FIFO_CTRL1 = 0x07;
@@ -58,6 +72,7 @@ constexpr uint8_t LSM6DSV_REG_CTRL2      = 0x11;
 constexpr uint8_t LSM6DSV_REG_CTRL3      = 0x12;
 constexpr uint8_t LSM6DSV_REG_CTRL6      = 0x15;
 constexpr uint8_t LSM6DSV_REG_CTRL8      = 0x17;
+constexpr uint8_t LSM6DSV_REG_CTRL9      = 0x18;
 constexpr uint8_t LSM6DSV_REG_FIFO_STATUS1 = 0x1B;
 constexpr uint8_t LSM6DSV_REG_FIFO_STATUS2 = 0x1C;
 constexpr uint8_t LSM6DSV_REG_STATUS     = 0x1E;
@@ -110,6 +125,7 @@ constexpr uint8_t LSM6DSV_CTRL6_PRESET_GYRO_2000DPS_HIGH_G = 0x05;
 constexpr uint8_t LSM6DSV_CTRL6_PRESET_GYRO_4000DPS_HIGH_G = 0x0D;
 constexpr uint8_t LSM6DSV_CTRL8_PRESET_ACCEL_16G = 0x03;
 constexpr uint8_t LSM6DSV_CTRL8_PRESET_ACCEL_32G = 0x06;
+constexpr uint8_t LSM6DSV_CTRL9_LPF2_XL_EN = 1U << 3;
 
 constexpr uint16_t LSM6DSV_DEFAULT_BACKEND_RATE_HZ = 1000;
 constexpr uint8_t LSM6DSV_INIT_MAX_TRIES = 5;
@@ -430,7 +446,7 @@ bool AP_InertialSensor_LSM6DSV::hardware_init()
 
     WITH_SEMAPHORE(_dev->get_semaphore());
     _dev->set_speed(AP_HAL::Device::SPEED_LOW);
-    if (!_dev->setup_checked_registers(13, 20)) {
+    if (!_dev->setup_checked_registers(14, 20)) {
         return false;
     }
 
@@ -542,7 +558,13 @@ bool AP_InertialSensor_LSM6DSV::configure_gyro()
 
 bool AP_InertialSensor_LSM6DSV::configure_accel()
 {
+#if LSM6DSV_ACCEL_LPF2_ENABLED
+    const uint8_t ctrl8 = _variant_info->ctrl8_value | LSM6DSV_ACCEL_LPF2_BW;
+    return write_register(LSM6DSV_REG_CTRL8, ctrl8, true) &&
+           write_register(LSM6DSV_REG_CTRL9, LSM6DSV_CTRL9_LPF2_XL_EN, true);
+#else
     return write_register(LSM6DSV_REG_CTRL8, _variant_info->ctrl8_value, true);
+#endif
 }
 
 bool AP_InertialSensor_LSM6DSV::configure_primary_fifo()
@@ -594,9 +616,11 @@ bool AP_InertialSensor_LSM6DSV::configure_dual_channel_accel()
         return false;
     }
 
-    return write_register(LSM6DSV_REG_CTRL8,
-                          _variant_info->ctrl8_value | LSM6DSV_CTRL8_XL_DUALC_EN,
-                          true);
+    uint8_t ctrl8 = _variant_info->ctrl8_value | LSM6DSV_CTRL8_XL_DUALC_EN;
+#if LSM6DSV_ACCEL_LPF2_ENABLED
+    ctrl8 |= LSM6DSV_ACCEL_LPF2_BW;
+#endif
+    return write_register(LSM6DSV_REG_CTRL8, ctrl8, true);
 }
 
 uint8_t AP_InertialSensor_LSM6DSV::odr_code_for_rate(uint16_t rate_hz) const
