@@ -1291,7 +1291,7 @@ void Compass::_probe_external_i2c_compasses(void)
         ADD_BACKEND(DRIVER_IST8308, AP_Compass_IST8308::probe(GET_I2C_DEVICE(i, HAL_COMPASS_IST8308_I2C_ADDR),
                     true, ROTATION_NONE));
     }
-#if !defined(HAL_SKIP_AUTO_INTERNAL_I2C_PROBE)
+#if !defined(HAL_COMPASS_DISABLE_IST8308_INTERNAL_PROBE) && !defined(HAL_SKIP_AUTO_INTERNAL_I2C_PROBE)
     FOREACH_I2C_INTERNAL(i) {
         ADD_BACKEND(DRIVER_IST8308, AP_Compass_IST8308::probe(GET_I2C_DEVICE(i, HAL_COMPASS_IST8308_I2C_ADDR),
                     all_external, ROTATION_NONE));
