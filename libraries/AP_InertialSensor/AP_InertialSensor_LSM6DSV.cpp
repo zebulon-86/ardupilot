@@ -47,7 +47,7 @@ namespace {
 //   0x00 = ODR/4   0x20 = ODR/10   0x40 = ODR/20   0x60 = ODR/45
 //   0x80 = ODR/100 0xA0 = ODR/200  0xC0 = ODR/400  0xE0 = ODR/800
 #ifndef LSM6DSV_ACCEL_LPF2_BW
-#define LSM6DSV_ACCEL_LPF2_BW 0x20  // ODR/10 → 200 Hz @ 2 kHz ODR
+#define LSM6DSV_ACCEL_LPF2_BW 0x20  // baseline: ODR/10 -> 200 Hz @ 2 kHz ODR
 #endif
 
 // ---- FIFO control registers (R/W) ----
@@ -192,6 +192,22 @@ struct PACKED RawFifoWord {
 
 static_assert(sizeof(RawFifoWord) == 7, "RawFifoWord must be 7 bytes");
 constexpr uint16_t LSM6DSV_FIFO_BURST_BUFFER_SIZE = LSM6DSV_FIFO_BURST_WORDS * sizeof(RawFifoWord) + 1;
+
+// Select LPF2 bandwidth to keep cutoff ~200 Hz across ODR settings.
+static uint8_t accel_lpf2_bw_for_rate(uint16_t rate_hz)
+{
+    switch (rate_hz) {
+    case 8000:
+        return 0x60; // ODR/45 ~= 178 Hz
+    case 4000:
+        return 0x40; // ODR/20 = 200 Hz
+    case 2000:
+        return 0x20; // ODR/10 = 200 Hz
+    case 1000:
+    default:
+        return LSM6DSV_ACCEL_LPF2_BW;
+    }
+}
 
 }
 
@@ -480,7 +496,7 @@ bool AP_InertialSensor_LSM6DSV::configure_accel()
         break;
     }
 #if LSM6DSV_ACCEL_LPF2_ENABLED
-    const uint8_t ctrl8 = fs_xl | LSM6DSV_ACCEL_LPF2_BW;
+    const uint8_t ctrl8 = fs_xl | accel_lpf2_bw_for_rate(_backend_rate_hz);
     return write_register(LSM6DSV_REG_CTRL8, ctrl8, true) &&
            write_register(LSM6DSV_REG_CTRL9, LSM6DSV_CTRL9_LPF2_XL_EN, true);
 #else
